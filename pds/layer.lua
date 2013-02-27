@@ -72,7 +72,7 @@ local function new_layer(ctype, width, height)
 		width = width,
 		height = height,
 
-		cells = ffi.new(ctype .. "[?]", 1 + width * height)
+		cells = ffi.new(ctype .. "[?]", 1 + width * height),
 
 		ctype = ctype
 	}, layer_mt)

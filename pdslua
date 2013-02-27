@@ -1,0 +1,18 @@
+#! /usr/bin/env luajit
+local module = arg[1] or "demo-main"
+
+module = module:gsub("%.lua$", "") -- trim .lua
+
+if type(LUA_PATH) ~= "string" then
+	LUA_PATH = "common/?.lua"
+end
+
+LUA_PATH = module .. "/?.lua;" .. LUA_PATH
+LUA_PATH = "?.lua;" .. LUA_PATH
+
+dofile "extend.lua"
+
+math.randomseed(os.time())
+require(module)
+os.exit(0)
+
