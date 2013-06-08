@@ -55,7 +55,7 @@ function layer:each(f)
 	local i = 1
 	for y = self.y1, self.y2 do
 		for x = self.x1, self.x2 do
-			f(self.cells[i], x, y)
+			f(self.cells[i], x, y, i)
 			i = i + 1
 		end
 	end

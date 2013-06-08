@@ -19,7 +19,7 @@ function pqueue:remove(item)
 	return link
 end
 
-function pqueue:insert(cost, item)
+function pqueue:push(item, cost)
 	local link = self:remove(item) 
 	if link == nil then
 		link = {cost, item, link, link}
@@ -30,14 +30,14 @@ function pqueue:insert(cost, item)
 	while next ~= nil and next[1] <= cost do
 		prev = next
 		next = prev[3]
-		cost = cost - prev[1]
+		-- cost = cost - prev[1]
 	end
 	link[1] = cost
 	link[4] = prev
 	link[3] = next
 	prev[3] = link
 	if next ~= nil then
-		next[1] = next[1] - cost
+		-- next[1] = next[1] - cost
 		next[4] = link
 	end
 
@@ -96,6 +96,10 @@ function pqueue:lookup(item)
 	end
 end
 
+function pqueue:isempty()
+	return self.head[3] == nil
+end
+
 
 local function newpqueue( )
 	return setmetatable({
@@ -107,3 +111,4 @@ end
 return {
 	new = newpqueue
 }
+

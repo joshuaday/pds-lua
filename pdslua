@@ -12,6 +12,8 @@ LUA_PATH = "?.lua;" .. LUA_PATH
 
 dofile "extend.lua"
 
+local pds = require "pds/pds"
+
 math.randomseed(os.time())
 require(module)
 os.exit(0)
