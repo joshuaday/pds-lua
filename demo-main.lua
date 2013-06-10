@@ -1,3 +1,4 @@
+
 local term = require "terminal"
 local pds = require "pds/pds"
 
@@ -19,10 +20,10 @@ term.settitle "Progressive Dijkstra Scan"
 local cave = [[
 ############################################################
 #####################################################11#####
-#####11111##################111###############111111122111##
-#####122221###########1####1221########11111111222222332221#
-#####1233321#########11###12321###############1112333443321#
-####1234433211111####11###1221###################123454321##
+#####11111##################111###~~~~~~######111111122111##
+#####122221###########1####1221~~~~~~~~11111111222222332221#
+#####1233321#########11###12321~~~~~~~~#######1112333443321#
+####1234433211111####11###1221##~~~~~~###########123454321##
 ###123443223222221###1####121####################12344321###
 ##12344321123333321##1####121####################12344321###
 ##1234321##122234321#1###12321##################123454321###
@@ -37,10 +38,10 @@ local cave = [[
 ######1234321####11######1234321####1234321#########123321##
 #####1233321####1221#####1234321####123223211111111123321###
 ####12322321####123211####123321####12211222221#####12321###
-####122112321###1222221###123321####111##112321######12321##
-####121##12321###1112321#1234321###########1221#######12321#
-#####1####12321#####12321234321############1221########1221#
-##########12321######1232344321############1221#########11##
+####122112321###1222221###123321#~~~111##112321######12321##
+####121##12321###1112321#1234321#~~~~~#####1221#######12321#
+#####1####12321#####12321234321##~~~~~~####1221########1221#
+##########12321######1232344321###~~~~~####1221#########11##
 #########1234321#####12333333321##########12321#############
 #########1233321####123332222222111#####11233321############
 ##########122221####1222211111122221###12222233211##########
@@ -49,7 +50,14 @@ local cave = [[
 ############################################################
 ]]
 
+local tiletype = {
+	[string.byte "."] = { fg = 7, bg = 0, ch = ".", cost = 1 },
+	[string.byte "#"] = { fg = 0, bg = 4, ch = "#", block = 1 },
+	[string.byte "~"] = { fg = 2, bg = 0, ch = "~", cost = 1 }
+}
+
 local function stringmap(src)
+
 	local function lines(src)
 		local idx = 1
 		return function ()
@@ -74,24 +82,27 @@ local function stringmap(src)
 	if width > 0 and height > 0 then
 		-- allocate a topology and wall overlay for the map
 		local Grid = require "pds/topo/grid"
-		local grid = Grid.new(width, height, 8)
+		local grid = Grid.new(width, height, 6)
 		local cells = grid:overlay "int"
+		local mask = grid:overlay "int"
+		local costs = grid:overlay "int"
 		
 		local point = {x = 1, y = 1}
 		for line in lines(src) do
 			for x = 1, #line do
+				local c = string.byte(line, x)
+
 				point.x = x
-				if string.byte(line, x) == string.byte "#" then
-					cells:set(point, -1)
-				else
-					cells:set(point, 1)
-				end
+				if not tiletype[c] then c = string.byte "." end
+				cells:set(point, c)
+
+				costs:set(point, tiletype[c].cost or -1)
+				mask:set(point, tiletype[c].block or 0)
 			end
-			cells:set(point, -1)
 			point.y = point.y + 1
 		end
 
-		return grid, cells
+		return grid, cells, costs
 	end
 end
 
@@ -109,21 +120,29 @@ local function simulate(term)
 		{ x = 10, y = 7},
 		{ x = 30, y = 8},
 		{ x = 20, y = 16},
-		{ x = 30, y = 9}
+		{ x = 30, y = 9},
+
+		{ x = 50, y = 7},
+		{ x = 20, y = 7},
+		{ x = 40, y = 7},
+		{ x = 10, y = 8},
+		{ x = 30, y = 9},
+		{ x = 20, y = 17},
+		{ x = 30, y = 10}
 	}
 
 	local time = 0
 
 	local beeping = false
 
-	local grid, cells = stringmap(cave)
+	local grid, cells, costs = stringmap(cave)
 
 	local function beep()
 		beeping = 7
 	end
 
 	local function interactiveinput()
-		local key, code = term.nbgetch()
+		local key, code = term.getch()
 		-- playerturn(player, key)
 
 		if key == "Q" then
@@ -165,26 +184,45 @@ local function simulate(term)
 			end
 		end
 
-		local input = grid:overlay "int" :fill(300) :set(player, 0)
-		local fromplayer = input / cells
+
+		local input = grid:overlay "int" :fill(200) :set(player, 0)
+
+		for i = 1, #monsters do
+			local monster = monsters[i]
+			costs:set(monster, 1) -- monsters should walk around each other if it'll only take two extra turns
+		end
+
+		local fromplayer = input / costs
+
+		do
+			local prev = costs:get(player)
+			costs:set(player, -1)
+			flight = (fromplayer * -2) / costs
+			-- flight:mul(2):add(fromplayer, -1)
+
+			for i = 1, #monsters do
+				local monster = monsters[i]
+				costs:set(monster, -1)
+			end
+
+			for i = 1, #monsters do
+				local monster = monsters[i]
+
+				costs:set(monster, 1)
+				flight:rolldown(costs, monster)
+				costs:set(monster, -1)
+			end
+			costs:set(player, prev)
+		end
+
+
 
 		for x, y, idx in grid:lattice() do
 			term.at(x - 1, y - 1)
-			if cells.cells[idx] == -1 then
-				term.fg(0).bg(4).print("#")
-				-- term.fg(7).bg(0).put(65 + output.cells[idx])
-			else
-				term.fg(7).bg(0).print(".")
-				-- term.fg(7).bg(0).put(65 + output.cells[idx])
-			end
-		end
-		
-		do
-			flight = (fromplayer * -2) / cells
-			for i = 1, #monsters do
-				local monster = monsters[i]
-				flight:rolldown(cells, monster)
-			end
+			local c = cells.cells[idx]
+			local tile = tiletype[c]
+			
+			term.fg(tile.fg).bg(tile.bg).print(tile.ch)
 		end
 
 		term.at(player.x - 1, player.y - 1).fg(15).bg(0).print("@")

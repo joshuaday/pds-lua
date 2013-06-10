@@ -22,35 +22,70 @@ function overlay:zero()
 end
 
 function overlay:add(other, scale)
-	assert(other.topology == self.topology)
+	if type(other) == "number" then
+		other = other * (scale or 1)
+		for i = 1, self.topology.length do
+			self.cells[i] = self.cells[i] + other
+		end
+	else
+		assert(other.topology == self.topology)
 
-	scale = scale or 1
-	
-	for i = 1, self.topology.length do
-		self.cells[i] = self.cells[i] + scale * other.cells[i]
+		scale = scale or 1
+		
+		for i = 1, self.topology.length do
+			self.cells[i] = self.cells[i] + scale * other.cells[i]
+		end
+
+		return self
 	end
-
-	return self
 end
 
 function overlay:mul(other)
-	assert(other.topology == self.topology)
-	
-	for i = 1, self.topology.length do
-		self.cells[i] = self.cells[i] * other.cells[i]
+	if type(other) == "number" then
+		for i = 1, self.topology.length do
+			self.cells[i] = self.cells[i] * other
+		end
+	else
+		assert(other.topology == self.topology)
+		
+		for i = 1, self.topology.length do
+			self.cells[i] = self.cells[i] * other.cells[i]
+		end
 	end
 
 	return self
 end
 
-function overlay:map(other, fn)
+function overlay:fold(fn)
+	local v = self.cells[1]
+	for i = 2, self.topology.length do
+		v = fn(v, self.cells[i])
+	end
+	return v
+end
+
+function overlay:map(fn)
+	for i = 1, self.topology.length do
+		self.cells[i] = fn(self.cells[i])
+	end
+
+	return self
+end
+
+function overlay:zip(other, fn)
 	assert(other.topology == self.topology)
+
+	local c = self:homologue()
 	
 	for i = 1, self.topology.length do
 		self.cells[i] = fn(self.cells[i], other.cells[i])
 	end
 
 	return self
+end
+
+function overlay:homologue()
+	return self.topology:overlay(self.ctype)
 end
 
 function overlay:clone()
@@ -84,7 +119,7 @@ end
 function overlay:rolldown(cells, point)
 	local idx = self.topology:index(point)
 	local go = pds.bestneighbor(self, cells, idx)
-	self.topology:index_unpack(point, go)
+	self.topology:deindex(point, go)
 end
 
 function overlay:set(point, value)

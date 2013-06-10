@@ -4,6 +4,9 @@ local Grid = { }
 local grid = { }
 local grid_mt = {__index = grid}
 
+local edgemap = { }
+local edgemap_mt = {__index = edgemap}
+
 local Overlay = require "pds/overlay"
 local ffi = require "ffi"
 
@@ -20,18 +23,18 @@ function grid:index(point)
 	end
 end
 
-function grid:index_unpack(point, idx)
+function grid:deindex(point, idx)
 	if idx == 0 then
 		return false
 	else
-		point.x, point.y = 1 + (idx - 1) % self.width, 1 + math.floor((idx - 1) / self.width)
+		local p = self.unpacked.cells[idx]
+		point.x, point.y = p.x, p.y
 		return true
 	end
 end
 
--- for neighbors, state must be an integer, and will always be 0 on the first call;
+-- for outlet, state must be an integer, and will always be 0 on the first call;
 -- after that, it will be whatever you returned last, but it must be numerical.
-
 
 -- the returned cost must be _valid_, that is, must satisfy two requirements:
 --  1) it must be at least equal to prior for all possible priors
@@ -43,11 +46,13 @@ end
 --     safe again to enter; custom monster logic is necessary to cause a monster to leave the
 --     cell if it is already in it, and does not fall under the purview of the pds.
 
-function grid:neighbor(idx, costmap, prior, state)
-	while state < #self.connectivity do 
-		state = state + 1
-		local neighbor = idx + self.connectivity[state]
+function edgemap:outlet(idx, prior, state)
+	local costmap = self.costmap
+	local topo = costmap.topology
 
+	while state < #topo.connectivity do 
+		state = state + 1
+		local neighbor = idx + topo.connectivity[state]
 		
 		-- checks for diagonals go here, too
 		local cost = costmap.cells[neighbor]
@@ -55,6 +60,10 @@ function grid:neighbor(idx, costmap, prior, state)
 			return neighbor, cost + prior, state
 		end
 	end
+end
+
+function grid:edgemap_from_costmap(costmap)
+	return setmetatable ({costmap = costmap}, edgemap_mt)
 end
 
 function grid:lattice( )
@@ -93,15 +102,28 @@ function Grid.new(width, height, connectivity)
 		overlays = setmetatable({}, {__mode = "k"})
 	}, grid_mt)
 
+	-- PREPARE THE CONNECTIVITY (FOR :neighbor)
 	if connectivity == 4 then
-		rawset(connectivity, {-width, 1, width, -1})
+		rawset(self, "connectivity", {-width, 1, width, -1})
 	elseif connectivity == 6 then
-		rawset(connectivity, {-width, -width + 1, 1, width, width - 1, -1})
+		rawset(self, "connectivity", {-width - 1, -width + 1, 1, width + 1, width - 1, -1})
 	else 
 		rawset(self, "connectivity", {-width - 1, -width, -width + 1, 1, 1 + width, width, width - 1, -1})
 		-- diagonal connectivity rules can be optional though
 		rawset(self, "diagonal_y", {-width, 0, -width, 0, width, 0, width, 0})
 		rawset(self, "diagonal_x", {-1, 0, 1, 0, 1, 0, -1, 0})
+	end
+
+
+	-- PREPARE THE UNPACK MAP (FOR :deindex)
+	self.unpacked = self:overlay (POINT_CTYPE)
+	local i = 1
+	for y = 1, height do
+		for x = 1, width do
+			self.unpacked.cells[i].x = x
+			self.unpacked.cells[i].y = y
+			i = i + 1
+		end
 	end
 
 	return self
